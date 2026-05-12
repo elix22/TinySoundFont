@@ -1,0 +1,272 @@
+name: Build TinySoundFont Libraries
+
+on:
+  push:
+    branches: [ sokol-dev, main, master ]
+    paths:
+      - 'tsf.h'
+      - 'tml.h'
+      - 'tsf.c'
+      - 'scripts/**'
+      - '.github/workflows/build-tsf.yml'
+  pull_request:
+    branches: [ sokol-dev, main, master ]
+    paths:
+      - 'tsf.h'
+      - 'tml.h'
+      - 'tsf.c'
+      - 'scripts/**'
+      - '.github/workflows/build-tsf.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: write  # Allow workflow to push built libs back to repository
+
+jobs:
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build Release
+      shell: pwsh
+      run: |
+        cd scripts
+        .\build-tsf-windows.ps1 -BuildType Release
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-x64
+        path: libs/windows/**/*
+        retention-days: 30
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build Release
+      run: |
+        chmod +x scripts/build-tsf-macos.sh
+        scripts/build-tsf-macos.sh ${{ matrix.arch }} Release
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-${{ matrix.arch }}
+        path: libs/macos/${{ matrix.arch }}/**/*
+        retention-days: 30
+
+  build-linux:
+    name: Build Linux (X64)
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
+
+    - name: Build Release
+      run: |
+        chmod +x scripts/build-tsf-linux.sh
+        scripts/build-tsf-linux.sh Release
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-X64
+        path: libs/linux/**/*
+        retention-days: 30
+
+  build-web:
+    name: Build Web (Emscripten)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Emscripten
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: '3.1.56'
+
+    - name: Build Release
+      run: |
+        chmod +x scripts/build-tsf-web.sh
+        scripts/build-tsf-web.sh Release
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: emscripten-x86
+        path: libs/emscripten/**/*
+        retention-days: 30
+
+  build-android:
+    name: Build Android (${{ matrix.abi }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install Android NDK
+      run: |
+        echo "Installing Android NDK..."
+        sdkmanager --install "ndk;27.2.12479018"
+        echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> $GITHUB_ENV
+
+    - name: Build Release
+      run: |
+        chmod +x scripts/build-tsf-android.sh
+        scripts/build-tsf-android.sh ${{ matrix.abi }} Release
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-${{ matrix.abi }}
+        path: libs/android/${{ matrix.abi }}/**/*
+        retention-days: 30
+
+  build-ios:
+    name: Build iOS (arm64)
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build Release
+      run: |
+        chmod +x scripts/build-tsf-ios.sh
+        scripts/build-tsf-ios.sh arm64 Release
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-arm64
+        path: libs/ios/**/*
+        retention-days: 30
+
+  # Combine all artifacts and commit back to the repo
+  combine-artifacts:
+    name: Combine All TinySoundFont Libraries
+    needs: [build-windows, build-macos, build-linux, build-web, build-android, build-ios]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
+      (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') &&
+      (needs.build-linux.result == 'success' || needs.build-linux.result == 'skipped') &&
+      (needs.build-web.result == 'success' || needs.build-web.result == 'skipped') &&
+      (needs.build-android.result == 'success' || needs.build-android.result == 'skipped') &&
+      (needs.build-ios.result == 'success' || needs.build-ios.result == 'skipped')
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: libs
+
+    - name: Reorganize artifacts
+      run: |
+        mkdir -p combined-libs/windows/x64/release
+        mkdir -p combined-libs/macos/arm64/release
+        mkdir -p combined-libs/macos/x86_64/release
+        mkdir -p combined-libs/linux/X64/release
+        mkdir -p combined-libs/emscripten/x86/release
+        mkdir -p combined-libs/android/arm64-v8a/release
+        mkdir -p combined-libs/android/armeabi-v7a/release
+        mkdir -p combined-libs/android/x86_64/release
+        mkdir -p combined-libs/ios/release
+
+        if [ -d "libs/windows-x64" ]; then
+          cp -r libs/windows-x64/* combined-libs/windows/ || true
+        fi
+        if [ -d "libs/macos-arm64" ]; then
+          cp -r libs/macos-arm64/* combined-libs/macos/arm64/ || true
+        fi
+        if [ -d "libs/macos-x86_64" ]; then
+          cp -r libs/macos-x86_64/* combined-libs/macos/x86_64/ || true
+        fi
+        if [ -d "libs/linux-X64" ]; then
+          cp -r libs/linux-X64/* combined-libs/linux/ || true
+        fi
+        if [ -d "libs/emscripten-x86" ]; then
+          cp -r libs/emscripten-x86/* combined-libs/emscripten/ || true
+        fi
+        if [ -d "libs/android-arm64-v8a" ]; then
+          cp -r libs/android-arm64-v8a/* combined-libs/android/arm64-v8a/ || true
+        fi
+        if [ -d "libs/android-armeabi-v7a" ]; then
+          cp -r libs/android-armeabi-v7a/* combined-libs/android/armeabi-v7a/ || true
+        fi
+        if [ -d "libs/android-x86_64" ]; then
+          cp -r libs/android-x86_64/* combined-libs/android/x86_64/ || true
+        fi
+        if [ -d "libs/ios-arm64" ]; then
+          cp -r libs/ios-arm64/* combined-libs/ios/ || true
+        fi
+
+        echo "Final artifact structure:"
+        find combined-libs -type f
+
+    - name: Upload combined artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: tsf-libraries-all-platforms
+        path: combined-libs/**/*
+        retention-days: 90
+
+    - name: Commit libraries to repository
+      if: (github.ref == 'refs/heads/sokol-dev' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      run: |
+        git clone --depth 2 --branch ${{ github.ref_name }} https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git repo
+        cd repo
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        rm -rf libs
+        mkdir -p libs
+        cp -r ../combined-libs/* libs/
+
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Updating TinySoundFont libraries..."
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        git add libs/
+        git diff --cached --quiet && echo "No library changes to commit" && exit 0
+
+        git commit -m "Auto-update built TinySoundFont libraries [skip ci]
+
+        Built from commit: ${{ github.sha }}
+        Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+        git push origin ${{ github.ref_name }}
+
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "TinySoundFont libraries committed and pushed successfully"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
