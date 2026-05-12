@@ -203,6 +203,12 @@ public static extern void tsf_render_short(IntPtr f, short* buffer, int samples,
 [DllImport("tsf", EntryPoint = "tsf_render_float", CallingConvention = CallingConvention.Cdecl)]
 #endif
 public static extern void tsf_render_float(IntPtr f, ref float buffer, int samples, int flag_mixing);
+#if __IOS__
+[DllImport("@rpath/tsf.framework/tsf", EntryPoint = "tsf_render_float", CallingConvention = CallingConvention.Cdecl)]
+#else
+[DllImport("tsf", EntryPoint = "tsf_render_float", CallingConvention = CallingConvention.Cdecl)]
+#endif
+public static extern void tsf_render_float(IntPtr f, float* buffer, int samples, int flag_mixing);
 
 #if __IOS__
 [DllImport("@rpath/tsf.framework/tsf", EntryPoint = "tsf_channel_set_presetindex", CallingConvention = CallingConvention.Cdecl)]

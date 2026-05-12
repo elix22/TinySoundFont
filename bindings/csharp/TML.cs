@@ -16,17 +16,17 @@ public enum TSFOutputMode
     TSF_STEREO_UNWEAVED,
     TSF_MONO,
 }
-// Helper union for tml_message: note_on/off (key+vel), control_change (control+val),
-// program_change (program), pitch_bend (int), set_tempo (uint) — 4 bytes wide.
-[StructLayout(LayoutKind.Explicit, Size = 4)]
+// Helper union for tml_message: 2 bytes wide matching the actual C union.
+// Byte 0: key / control / program (all aliases).  Byte 1: vel / value (aliases).
+// pitch_bend is the raw unsigned short spanning both bytes.
+[StructLayout(LayoutKind.Explicit, Size = 2)]
 public struct tml_union {
     [FieldOffset(0)] public byte key;
     [FieldOffset(1)] public byte vel;
     [FieldOffset(0)] public byte control;
     [FieldOffset(1)] public byte value;
     [FieldOffset(0)] public byte program;
-    [FieldOffset(0)] public int pitch_bend;
-    [FieldOffset(0)] public uint tempo;
+    [FieldOffset(0)] public ushort pitch_bend;
 }
 [StructLayout(LayoutKind.Sequential)]
 public struct tml_message
@@ -34,7 +34,7 @@ public struct tml_message
     public uint time;
     public byte type;
     public byte channel;
-    public tml_union data; // union: data.key, data.vel, data.control, data.value, data.program, data.pitch_bend, data.tempo
+    public tml_union data; // union: data.key, data.vel, data.control, data.value, data.program, data.pitch_bend (ushort)
     public tml_message* next;
 }
 #if __IOS__
