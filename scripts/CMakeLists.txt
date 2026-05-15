@@ -12,6 +12,11 @@ endif()
 
 target_include_directories(tsf PRIVATE "${TSF_ROOT}")
 
+# Windows: export all symbols from the DLL.
+if(WIN32)
+    target_compile_definitions(tsf PRIVATE TSF_DLL_EXPORT)
+endif()
+
 # iOS: build as a framework so code signing works on device.
 if(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set_target_properties(tsf PROPERTIES

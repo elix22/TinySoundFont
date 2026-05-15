@@ -44,9 +44,13 @@ extern "C" {
 
 // Define this if you want the API functions to be static
 #ifdef TML_STATIC
-#define TMLDEF static
+#  define TMLDEF static
+#elif defined(TML_DLL_EXPORT)
+#  define TMLDEF __declspec(dllexport)
+#elif defined(TML_DLL_IMPORT)
+#  define TMLDEF __declspec(dllimport)
 #else
-#define TMLDEF extern
+#  define TMLDEF extern
 #endif
 
 // Channel message type

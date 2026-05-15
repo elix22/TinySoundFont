@@ -54,9 +54,13 @@ extern "C" {
 
 //define this if you want the API functions to be static
 #ifdef TSF_STATIC
-#define TSFDEF static
+#  define TSFDEF static
+#elif defined(TSF_DLL_EXPORT)
+#  define TSFDEF __declspec(dllexport)
+#elif defined(TSF_DLL_IMPORT)
+#  define TSFDEF __declspec(dllimport)
 #else
-#define TSFDEF extern
+#  define TSFDEF extern
 #endif
 
 // The load functions will return a pointer to a struct tsf which all functions
